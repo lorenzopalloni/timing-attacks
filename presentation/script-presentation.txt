@@ -1,0 +1,79 @@
+########################################################################################
+# 1
+Il principale obiettivo di questo progetto è stato quello di riassumere due fondamentali timing attack al criptosistema RSA.
+Nel 1996, Kocher fu il primo a trattare i timing attack e successivamente nel 2005 Brumley e Boneh dimostrarono che un timing attack era possibile da remoto contro criptosistemi più sofisticati di quelli attaccati da Kocher quasi 10 anni prima.
+
+A timing attack è un caso particolare di attacco side-channel. Un attacco side-channel sfrutta parametri specifici del sistema sotto attacco, come per esempio i tempi di esecuzioni di alcune routine, le emissioni elettromagnetiche e il carico di corrente utilizzato. Nel caso dei timing attack, il parametro in questione è appunto il tempo richiesto per l'esecuzione di routine impiegate dal criptosistema utilizzato dallo specifico sistema che lo implementa.
+
+########################################################################################
+# 2
+Il criptosistema RSA è fortemente basato su l'esponenziazione modulare. Ci sono diversi modi per implementare questo tipo di funzione, qua vediamo lo pseudocodice di una delle sue versioni base, che tratta i bit dell'esponente da sinistra verso destra.
+
+Il fatto che ci interessa sottolineare qua, è che l'algoritmo esegue una moltiplicazione modulare per ogni bit dell'esponente e nella riga 5 viene verificato il valore del k-esimo bit e in caso sia 1 viene effettuata una moltiplicazione aggiuntiva. La differenza nei tempi di esecuzione fra un guess e il vero esponente, porta informazioni che si rivelano spesso sufficienti per l'identificazione di ogni bit.
+
+########################################################################################
+# 3
+Per l'attacco sviluppato da Kocher, iniziamo a descrivere alcune assunzioni e concetti preliminari.
+In RSA, la decryption viene effettuata con una esponenziazione modulare, qua y alla x modulo n. Assumiamo che l'attaccante voglia svelare l'esponente x, che sappia già i primi b bits di x, e questo lo possiamo assumere dato che il primo bit è sempre 1. poi dovrebbe essere in grado di decriptare quanti ciphertext ovvero y diverse lui vuole.
+e dovrebbe avere a disposizione un cronometro abbastanza preciso per misurare i tempi di esecuzione della decriptazione originale e di una decriptazione simulata da lui nella quale utilizza solo tante iterazioni dell'algoritmo di esponenziazione quanti sono i bit che già conosce.
+
+########################################################################################
+# 4
+In pratica, l'attaccante, chiamiamolo Oscar, per ogni bit che vuole svelare, dato che conosce i primi b bits, deve eseguire i seguenti steps:
+- generare s ciphertexts
+- ipotizza che il b-esimo bit dell'esponente sia zero
+- misurare il tempo di esecuzione nel suo dispositivo personalizzato nel quale esegue un numero di iterazioni di esponenziazione modulare quanti sono i bit che già conosce più uno, nel quale utilizza il bit che ha congetturato.
+- misura la varianza delle differenze
+- ripete dal punto 3 ipotizzando il bit uguale a 1
+- sceglie il bit che porta alla varianza più piccola
+- ripete finchè non trova tutti i bit
+
+########################################################################################
+# 5
+Adesso guardiamo quali sono le informazioni necessarie per un attaccante per poter effettuare l'attacco di Brumley e Boneh.
+Anche in questo caso, l'attaccante mira ad ipotizzare (o congetturare) correttamente l'esponente di un'operazione di esponenziazione modulare che involve un dato ciphertext che qua chiamiamo g, che sta per guess.
+Assumendo che l'attaccante conosca i primi i - 1 bit dell'esponente q, inizia ad ipotizzare g che ha lo stesso numero di bit di q, ovvero k bit, e imposta i primi i - 1 bit che già conosce e i restanti a zero.
+L'attaccante dovrebbe essere anche in grado di poter decriptare quanti testi cifrati lui voglia sul dispositivo sotto attacco.
+
+Inoltre, lui sa, dato che è informazione pubblica che i due fattori primi hanno un numero di bit compreso fra 511 e 512 nel caso di OpenSSL version 0.9.7, che è la specifica versione che Brumley e Boneh hanno testato durante i loro attacchi a un server.
+
+512 è la metà del modulo pubblico rappresentato da 1024 bit
+
+########################################################################################
+# 6
+
+lo preudoalgoritmo numero 3, descrive la procedura di attacco per svelare l'i-esimo bit dell'esponente, dati i primi i - 1 bit già conosciuti.
+
+Inizialmente l'attaccante congettura g (uguale alla congettura determinata nell'iterazione precedente dell'algoritmo) e g', che ha gli stessi bit di g, tranne l'i-esimo impostato a 1.
+
+Lo step 2. dell'algoritmo semplicemente moltiplica g e g' per un fattore pubblico basato su R, che permette durante la decryption allo step 2. di far eseguire internamente l'esponenziazione modulare su g invece che su g moltiplicato per R modulo n.
+
+misura i tempi delle due decryption, calcola il delta e l'ipotesi finale dell'algoritmo sarà 0 se il delta è abbastanza grande oppure 1 altrimenti.
+Abbastanza grande o piccolo viene determinato caso per caso, dato che i tempi sono altamente dipendenti dal sistema su cui vengono eseguiti.
+
+Da notare che inizialmente, g è minore di g' che a sua volta è minore di q nel caso in cui
+l'i-esimo bit sia 1. Nel caso in cui l'i-esimo bit sia 0, allora g sarà minore di q, dato che hanno i primi i bit tutti uguali e i successivi bit di g sono tutti impostati a zero, mentre g' sarà più grande di g e q dato che i primi i bit più significativi sono tutti settati uguali a q e l'i+1-esimo è impostato a 1 a differenza di g e q. Quindi per forza è più grande.
+
+########################################################################################
+# 7
+L'attacco di Brumley e Boneh funziona grazie e nonostante ad alcune migliorie che OpenSSL versione 0.9.7 utilizza nell'implementazione dell'algoritmo di esponenziazione per RSA.
+Abbiamo RSA CRT che sfrutta il teorema cinese del resto per ottenere uno speedup di un fattore 4, ma che rende vulnerabile il più piccolo dei fattori del modulo pubblico n.
+La tecnica della sliding windows che nonostante limiti la probabilità di ottenere una moltiplicazione aggiuntiva per ogni bit dell'esponente, aumentando il numero di decriptazioni effettuate Brumley e Boneh sono comunque riusciti ad ottenere tempi robusti abbastanza. Poi abbiamo la moltiplicazione Montgomery che richiede più tempo quando il congetturato g approccia q e molto meno tempo appena g supera q. Infine l'algoritmo di Karatsuba permette moltiplicazioni più veloci quando il numero di parole utilizzate nella moltiplicazione multi-precision per codificare le due quantità coinvolte sono simili. Aumentando la velocità dell'esponenziazione quando log2(g) è vicino a log2(q).
+
+########################################################################################
+# 8
+Per questo progetto ho cercato di implementare alcune funzioni e classi in Python per rendere possibile la simulazione dell'attacco di Brumley e Boneh. L'implementazione consiste principalmente di due classi, Attacker e Device che sono in grado di riprodurre i seguenti grafici.
+
+A sinistra vediamo l'esito di una simulazione su un device che non utilizza la tecnica di blinding, suggerita dagli autori per difendersi da questo tipo di attacchi con una riduzione nelle prestazioni di circa 4-10%.
+Si può vedere con diversi colori i diversi bit assegnati dall'attaccante in base alle variazioni temporali.
+A destra invece, con la tecnica di blinding le variazioni temporali non hanno una sistematicità e i bit risultano quindi imprevedibili.
+
+########################################################################################
+# 9
+In conclusione, possiamo evidenziare come Kocher, nel 1996 mostrò come fosse possibile esporre l'esponente privato in algoritmi di crittografia basati sull'esponenziazione modulare come RSA e lo scambio della chiave di Diffie-Hellman.
+Il suo articolo sollecitò migliorie nell'implementazione dell'algoritmo di esponenziazione modulare.
+
+Brumley e Boneh dimostrarono invece che era possibile effettuare un attacco temporale su server con switch multipli, nonostante anche le migliorie che l'algoritmo di esponenziazione veloce subì dopo l'articolo di Kocher in termini di sicurezza e in generale in termini di efficienza.
+
+Sollecitarono OpenSSL, come altre librerie di crittografia di impostare la tecnica blinding come predefinita, in modo da rendere le implementazioni RSA immuni dal loro attacco.
+

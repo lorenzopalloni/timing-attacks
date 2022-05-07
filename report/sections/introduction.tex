@@ -1,0 +1,10 @@
+\section{Introduction}
+
+Side-channel attacks exploit physical parameters such as execution time, supply current and electromagnetic emission to retrieve secrets from a system. A timing attack is a type of side-channel attack that, by measuring time differences in data-dependent operations of a cryptosystem, can expose its secret key. This report describes two major timing attacks against RSA, that is a public-key cryptosystem that is widespread in computer security applications.
+
+In 1996, Kocher was the first to design a timing attack against cryptosystems based on modular exponentiation, such as RSA \cite{bib:kocher}. His work pushed enhancements of modular exponentiation implementations. If adopted, they make the original attack ineffective.
+
+Almost ten years later, in 2005, Brumley and Boneh proved that timing attacks were practical on network servers based on OpenSSL\footnote{Throughout this report, we refer to OpenSSL version 0.9.7, unless otherwise specified.}, a commonly used library that implements RSA with several improvements \cite{bib:openssl}. In their experiments, they retrieved whole RSA private keys in time frames of approximately two hours, even through web servers with multiple network switches. Their work prompted OpenSSL developers, as well as other crypto libraries, to set up the defence technique "blinding" in RSA implementations by default.
+
+%----------------------------------------------------------------------------------------
+

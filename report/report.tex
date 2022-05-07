@@ -1,0 +1,109 @@
+\documentclass{article}
+
+\usepackage[final,nonatbib]{neurips_2019}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools, nccmath}
+\usepackage[mathscr]{euscript}  % euler script font
+\usepackage{cleveref}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\newtheorem{theorem}{Theorem}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\modexp}{mod\_exp}
+\DeclareMathOperator{\decryptiontime}{decryption\_time}
+\DeclareMathOperator{\extrareduction}{extra\ reduction}
+
+\title{Timing Attacks against RSA}
+
+\author{%
+  Lorenzo Palloni\\
+  University of Florence\\
+  \texttt{lorenzo.palloni@stud.unifi.it} \\
+}
+
+\begin{document}
+
+\maketitle
+
+%----------------------------------------------------------------------------------------
+\input{sections/introduction.tex}
+
+%----------------------------------------------------------------------------------------
+\input{sections/technical-background.tex}
+
+%----------------------------------------------------------------------------------------
+\input{sections/timing-attacks.tex}
+
+%----------------------------------------------------------------------------------------
+\input{sections/experiments.tex}
+
+%----------------------------------------------------------------------------------------
+\input{sections/defences.tex}
+
+%----------------------------------------------------------------------------------------
+\input{sections/conclusion.tex}
+
+%----------------------------------------------------------------------------------------
+% \section*{References}
+
+\medskip
+%\clearpage
+{\small
+\bibliographystyle{ieee}
+\begin{thebibliography}{9}
+
+\bibitem{bib:kocher}{Kocher, P.C., 1996, August. Timing attacks on implementations of Diffie-Hellman, RSA, DSS, and other systems. In Annual International Cryptology Conference (pp. 104-113). Springer, Berlin, Heidelberg.}
+\bibitem{bib:openssl}{Brumley, D. and Boneh, D., 2005. Remote timing attacks are practical. Computer Networks, 48(5), pp.701-716.}
+\bibitem{bib:boreale}{Boreale, M., 2003. Note per il corso di Sicurezza delle Reti.}
+\bibitem{bib:montgomery}{Montgomery, P.L., 1985. Modular multiplication without trial division. Mathematics of computation, 44(170), pp.519-521.}
+\bibitem{bib:sliding}{Menezes, A.J., Van Oorschot, P.C. and Vanstone, S.A., 2018. Handbook of applied cryptography. CRC press.}
+\bibitem{bib:schindler}{Schindler, W., 2000, August. A timing attack against RSA with the chinese remainder theorem. In International Workshop on Cryptographic Hardware and Embedded Systems (pp. 109-124). Springer, Berlin, Heidelberg.}
+\bibitem{bib:coppersmith}{Coppersmith, D., 1997. Small solutions to polynomial equations, and low exponent RSA vulnerabilities. Journal of cryptology, 10(4), pp.233-260.}
+
+\end{thebibliography}
+}
+%----------------------------------------------------------------------------------------
+
+\end{document}

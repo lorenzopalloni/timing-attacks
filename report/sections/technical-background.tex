@@ -1,0 +1,165 @@
+\section{Technical background}\label{sec:technical}
+The following sections cover some of the tools that will be useful to understand how the timing attacks work.
+
+First, we introduce some notation while explaining the RSA cryptosystem, then we present the fast modular exponentiation algorithm, and how it can be optimized using Chinese Remainder, Sliding Windows, Montgomery multiplication, and Karatsuba's algorithm. These enhancements are all implemented in the version of OpenSSL on which Brumley and Boneh designed their attack.
+
+\subsection{RSA}
+Assume two agents - Alice and Bob - want to communicate each other and, in particular, Alice wants to send a message $m$ to Bob. However, they are using a public channel, and a third agent - Oscar - is able to read $m$ once sent. Alice and Bob can achieve confidentiality, if they agree on a secret, a key $k$, in advance. Then Alice can mask the plaintext $m$, using $k$, in an unintelligible ciphertext $c$ such that only Bob with $k$ can understand it.
+
+In computer security, confidentiality can be attained using a cryptosystem, that is defined as a set of three components: a key generator, an encryption function and a decryption function.
+
+RSA is a public-key cryptosystem that brings the surnames of Ron Rivest, Adi Shamir and Leonard Adleman who published the algorithm in 1977.
+The key generation process of RSA can be described as follow:
+\begin{enumerate}
+  \item choose two prime numbers $p$, $q$, where $p \neq q$.
+  \item compute the modulus $n = p \cdot q$.
+  \item compute the Euler's function $\phi(n) = \phi(p) \cdot \phi(q) = (p - 1) \cdot (q - 1)$.
+  \item choose an integer $e: 1 < e \leq \phi(n)$ and $\gcd(e, \phi(n)) = 1$.
+  \item compute $d = e^{-1} \bmod \phi(n)$.
+\end{enumerate}
+The pair $\left< n, d\right>$ is the private key $K^-$, while $\left< n, e\right>$ is the public key $K^+$.
+
+The encryption function $E_{K^+}: \mathcal{P} \rightarrow \mathcal{C}$ and the decryption function $D_{K^-}: \mathcal{C} \rightarrow \mathcal{P}$ are respectively defined as $E_{K^+}[m] := m^e \bmod n$ and $D_{K^-}[c] := c^d \bmod n$. Where:
+\begin{itemize}
+\item $\mathcal{P}$ is the plaintext space;
+\item $\mathcal{C}$ is the ciphertext space;
+\item $m \in \mathcal{P}$ is a plaintext;
+\item $c \in \mathcal{C}$ is a ciphertext.
+\end{itemize}
+
+In our example, Bob should follow all the steps required by RSA key generator, yielding the public $K^+_{Bob}$ and the private $K^-_{Bob}$. Next, Alice can send $c := E_{K^+_{Bob}}[m]$ to Bob and, at this point, he is the only one that can read the original text through $E_{K^-_{Bob}}[c] =: m$.
+
+It should be clear now that modular exponentiation is core in both RSA encryption and decryption routines. Thus, if Oscar could retrieve the private exponent $d$, then he would be able to compute $e = d^{-1} \bmod \phi(n)$ through the Extended Euclidean Algorithm (EEA) \cite{bib:boreale}.
+
+\subsection{Modular exponentiation}
+
+\Cref{alg:one} shows a basic form of the modular exponentiation routine, also called square-and-multiply. In this case, the exponent bits are read from the most significant to the least significant (left-to-right), but a version that scans bits in the other way around is also possible.
+
+The time complexity in the average case of the modular exponentiation algorithm, where the inputs $y$, $x$ and $n$ are respectively bases, exponent and modulus, is $O(((\log_2n \cdot \log_2n) + \frac{1}{2} \log_2n) \cdot \log_2x)$. The main loop takes $O(\log_2x)$ steps in which a modular multiplication ($O(\log_2n \cdot \log_2n)$) takes always place. Assuming equiprobability of 1's and 0's among exponent bits, another modular multiplication is performed half of the times, thus the computational complexity per iteration is $O((\log_2n \cdot \log_2n) + \frac{1}{2} \log_2n)$ per step.
+
+\begin{algorithm}
+\caption{Left-to-right modular exponentiation algorithm.}\label{alg:one}
+\begin{algorithmic}[1]
+\Function{$\modexp$}{$y, x, n$}
+  \Comment{Computes $y^x \bmod n$}
+  \State $R \leftarrow 1$\;
+  \For{$k \leftarrow 0, w - 1$}
+    \State $R \leftarrow (R \cdot R) \bmod n$\;
+    \If{ $\text{(the } $k$ \text{-th bit of } $x$ \text{) is }1$ }
+      \State $R \leftarrow (R \cdot y) \bmod n$\;
+    \EndIf
+  \EndFor
+  \State \Return $R$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+In RSA, the plain left-to-right square-and-multiply can be improved through the Chinese Remainder technique that allows to map one-to-one $y^x \bmod n$ with $ \left< y^x \bmod p,\ y^x \bmod q \right>$ where $n$ has a $\lceil \log_2n \rceil$ bits representation, while both $p$ and $q$ have approximately $\frac{\log_2n}{2}$ bits representation each.
+
+Thus, since $\modexp$ depends upon modular multiplication, and that the latter's complexity depends on how many bits are required for the representation of the multiplication modulus, in the following section we will see how Chinese Remainder helps to achieve a speedup of four.
+
+\subsection{Chinese Remainder}
+
+The Chinese Remainder optmization is basically the application of the Chinese Remainder Theorem (CRT) that states the following:
+
+\begin{theorem}\label{theorem:one}
+Let $n = \prod_{i = 1}^{k}n_i$, where $n_1, \ldots, n_k$ are integers greater than $1$. If $(n_i, n_j)$ are coprime $\forall\ i \neq j \text{, with } i, j \in \{1, \dots, k\}$ and there exist $\left( a_1 \in \mathbb{Z}_{n_1}, \dots, a_k \in \mathbb{Z}_{n_k} \right)$, then there is one and only one integer $x$, such that $0 \leq x \leq n$ and the following system of congruences are satisfied:
+\begin{align*}
+  x &\equiv_{n_1} a_1 \\
+    & \vdots \\
+  x &\equiv_{n_k} a_k.
+\end{align*}
+In particular, $ x :=  \sum\limits_{i = 1}^{k} a_i \left( \frac{n}{n_i} \right) \left[ \left( \frac{n}{n_i} \right) ^{-1} \bmod n_i \right] $.
+\end{theorem}
+
+A detailed proof of \Cref{theorem:one} can be found in \cite{bib:boreale}.
+
+In RSA, the public modulus $n$ has private factors $p$ and $q$, both prime numbers, with $p \neq q$. These properties assure $\gcd(p, q) = 1$, and thus by CRT there exists a unique one-to-one map
+
+$$ y^x \bmod n \text{ } \longleftrightarrow \text{ } \left< y^x \bmod p,\ y^x \bmod q \right>. $$
+
+The unicity of this map allows to obtain the same result $y^x \bmod n$ through two strategies. The first, with direct evaluation of $y^x \bmod n$. The second, computing:
+
+\begin{enumerate}
+  \item $y^x \bmod p = y^{x \bmod \phi(p)} \bmod p = y^{x \bmod (p - 1)} \bmod p = y^{x_p} \bmod p$;
+  \item $y^x \bmod q = y^{x \bmod \phi(q)} \bmod q = y^{x \bmod (q - 1)} \bmod q = y^{x_q} \bmod q$;
+  \item $ y^x \bmod n = \Big\{ (y^{x_p} \bmod p) \cdot q \cdot (q^{-1} \bmod p) + (y^{x_q} \bmod q) \cdot p \cdot (p^{-1} \bmod q) \Big\} \bmod n. $
+\end{enumerate}
+
+% $\modexp$ twice, one for $y^x \bmod p = y^{x \bmod \phi(p)} \bmod p$ and one for $\ y^x \bmod q = y^{x \bmod \phi(q)} \bmod q$, then computing
+
+% $$ y^x \bmod n = \Big\{ (y^x \bmod p) \cdot q \cdot (q^{-1} \bmod p) + (y^x \bmod q) \cdot p \cdot (p^{-1} \bmod q) \Big\} \bmod n. $$
+
+To compare the two strategies in terms of time complexity, we need some assumptions (reasonable in practice). First of all, the number of bits required for the binary representation of the factors $p$ and $q$ are approximately half of the ones required by the modulus $n$, and that they are about the same between the exponent $x$ and the modulus $n$. In formulas:
+$$
+\begin{cases}
+  \log_2p \approx \frac{\log_2n}{2} \\
+  \log_2q \approx \frac{\log_2n}{2} \\
+  \log_2x \approx \log_2n
+\end{cases}
+$$
+
+Second, we assume that normal multiplication is used, that given two $n$-bit integers as inputs, takes approximately $\left(\log_2n\right)^2$ operations. Now, the complexity of the first strategy is the following:
+
+\begin{align*}
+  &O\left(
+    \left(
+      \left( \log_2n \right)^2 + \frac{1}{2} \left( \log_2n \right)
+    \right) \cdot \log_2n
+  \right) = O\left(\left( \log_2n \right)^3 \right),
+\end{align*}
+
+and for the second one:
+
+\begin{align*}
+  O\left(
+    \left(
+      \left( \frac{\log_2n}{2} \right)^2
+      + \frac{1}{2} \left( \frac{\log_2n}{2} \right)
+    \right) \cdot \frac{\log_2n}{2}
+  \right) \times 2 &= O\left(
+    \left( \frac{\log_2n}{2} \right) ^3 \times 2
+  \right) \\
+  &= O\left(
+    \frac{2}{8}
+    \left( \log_2n \right) ^3
+  \right) \\
+  &= O\left(
+    \frac{1}{4}
+    \left( \log_2n \right) ^3
+  \right).
+\end{align*}
+
+In other words, applying Chinese Remainder (second strategy), allows to attain the same result as directly computing $y^x \bmod n$ (first strategy), with a speedup of four.
+
+%----------------------------------------------------------------------------------------
+\subsection{Sliding windows}
+
+Sliding windows exponentiation preliminary processes a block of exponent bits for later use. In this way, the total number of multiplications for the exponentiation is reduced.
+
+Given $n$, the window size $w$ can be chosen to reach an optimal tradeoff between time required for precomputation and actual exponentiation. In OpenSSL with a $1024$-bit modulus, the default window size is five ($w = 5$). Details on how OpenSSL implements sliding window modular exponentiation can be found in \cite{bib:sliding}.
+
+%----------------------------------------------------------------------------------------
+\subsection{Montgomery modular multiplication}\label{subsec:montgomery}
+Given two integer $x$ and $y$, to obtain $xy \bmod n$, first $x \cdot y$ is computed, then a reduction modulo $n$ is performed.
+In its basic form, modular reduction is done by multi-precision division (which precision is limited only by the memory of the host system), and returning the remainder.
+In 1985, Peter Montgomery discovered a way to make modular exponentiation faster, using the fact that software and especially hardware operations for the reduction of a power of 2 are more efficient than a generic reduction modulo $n$ \cite{bib:montgomery}.
+
+Montgomery reduction requires inputs in Montgomery form. For instance, the Montgomery form of $x$ is $\bar{x} = xR \bmod n$, with $R := 2^m$, for some positive integer $m$. Then, setting $xy := c$, the Montgomery multiplication between $x$ and $y$ can be computed as $\bar{x} \bar{y} =  xyRR \bmod n = cRR \bmod n$ and, by using the fast Montgomery reduction algorithm to obtain $cRR * R^{-1} \bmod n = cR \bmod n$, that is the desired result in its Montgomery form. The non-Montgomery form of $cR \bmod n$ can be easily attained multiplying it by $R^{-1} \bmod n$.
+
+Montgomery reduction bears two key facts for Brumley and Boneh's timing attack against OpenSSL. The first one is that at the end of a Montgomery reduction, if $cR > q$, then subtracting $q$ from $cR$ assures that the output is in the range $[0, q)$. This last operation is called $\extrareduction$. The second one, discovered by Schindler in 2000, is that the probability of this extra reduction is equal to \cite{bib:schindler}:
+\begin{align}\label{eq:one}
+  Pr\left[ \extrareduction \right] = \frac{c \bmod n}{2R}.
+\end{align}
+
+\Cref{eq:one} suggests that the closer $c$ is to $n$, the greater the chance that an extra reduction takes place. Especially if $n = pq$ (with $p$ and $q$ both prime numbers), when $c$ approaches either $p$ or $q$, an extra reduction is more likely to occur.
+
+%----------------------------------------------------------------------------------------
+\subsection{Karatsuba's algorithm}
+Multi-precision integer multiplication is core for modular multiplication. Libraries that implement multi-precision operations, represent large integers as a sequence of words.
+Karatsuba multiplication performs better when two numbers have an equal number of words, requiring a time $O(n^{\log_23}) = O(n^{1.58})$, while standard multiplication takes $O(nm)$ where $n$ and $m$ are the (different) number of words of the two multiplied factors.
+
+OpenSSL makes use of Karatsuba multiplication when the multiplied factors are represented by the same number of words, and uses "normal" multiplication otherwise. This is a key fact in Brumley and Boneh's attack, since it allows through time measurements to reveal how frequently the two operands involved in a multiplication routine have the same length.
+
+%----------------------------------------------------------------------------------------
+

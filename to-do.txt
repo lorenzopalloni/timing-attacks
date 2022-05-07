@@ -1,0 +1,120 @@
+# To-do List
+
+## high priority
+ - attain 2.00 in learning-bucket-score
+
+## medium priority
+ - read set 3, since you did not do it too well, do it better
+ - take a look at the old-sample-written exams
+
+## low priority
+ - write something about current literature
+ - write something about Coppersmith's algorithm (study and cite it)
+
+## comments
+ - first 6 CFU covered by the lectures 1-29
+ - privacy (last 3 CPU) covered by the lectures 30-36
+
+## General structure for the presentation:
+  ok - introduction
+  ok - modexp
+  ok - kocher's timing attack - assumptions
+  ok - kocher's timing attack - pseudocode
+  ok - brumley and boneh's timing attack - assumptions
+  ok - brumley and boneh's timing attack - pseudocode
+  ok - brumley and boneh's timing attack - why it works
+  ok - experiments
+  ok - conclusion (hint: blinding has been set by default. (explain blinding?))
+
+  ok - 01 appendix: details on var(t - t')
+  ok - 02 appendix: details on prob. correct guess
+  {\mediumpriority
+    - 03 appendix: experiment (Kocher)
+    - 04 appendix: experiment Brumley and Boneh #1
+    - 0 appendix: experiment brumley and boneh #2
+    - 0 appendix: experiment brumley and boneh #3
+    - 0 appendix: experiment brumley and boneh #4
+    - 0 appendix: experiment brumley and boneh #5
+    - 0 appendix: experiment brumley and boneh #6
+  }
+
+## General structure for the report:
+ - introduction
+ - technical background
+   - RSA
+   - modular exponentiation
+   - CRT
+   - Sliding windows
+   - Montgomery multiplication
+   - Karatsuba's algorithm
+ - timing attacks
+   - the original Kocher's timing attack
+     - probability of a correct guess
+   - a timing attack on OpenSSL
+ - experiments
+   - Kocher's experiment
+   - Brumley and Boneh's experiments
+ - defences
+ - conclusion
+ - bibliography
+ (- appendix)
+
+# DONEs
+
+ - DONE - ask professor Boreale for moodle password
+ - DONE - call Emilio and ask him for advices
+ - DONE - call Bongmark and ask him for advices
+ - DONE - watch all the lectures (1-36)
+ - DONE - prepare a learning bucket
+ - DONE - set 1
+ - DONE - set 2
+ - DONE - set 3
+ - DONE - attain 1.00 in learning-bucket-score
+ - DONE - attain 1.25 in learning-bucket-score
+ - DONE - implement OpenSSL attack
+ - DONE - fix this: \item $c < b$ is the number of correct guesses.
+ - DONE - introduction for timing attacks
+ - DONE - 1st iteration
+ - DONE - CRT
+ - DONE - Sliding Windows
+ - DONE - Montgomery multiplication
+ - DONE - study Karatsuba's algorithm
+ - DONE - Karatsuba's algorithm
+ - DONE - study a timing attack on OpenSSL
+ - DONE - study Experiments
+ - DONE - the original Kocher's timing attack
+ - DONE - a timing attack on OpenSSL
+ - DONE - study Experiments
+ - DONE - Experiments
+ - DONE - study defences
+ - DONE - defences
+ - DONE - introduction (framing of the topic)
+ - DONE - conclusion
+ - DONE - start the 2nd iteration
+ - DONE - 2nd iteration
+ - DONE - primality test
+ - DONE - prime number generator
+ - DONE - generate n = pq
+ - DONE - fix timing delays w.r.t. montgomery reductions and karatsuba multiplications
+ - DONE - start plotting something
+ - DONE - beautify the plot
+ - DONE - implement a class for the attacker
+ - DONE - implement blinding
+ - DONE - attain 1.50 in learning-bucket-score
+ - DONE - save plot for comparison with/without blinding
+ - DONE - structure presentation
+ - DONE - write something for each slide
+ - DONE - presentation for the appointment on Monday, 24 January 2022:
+  - DONE - give a reasonable hierarchy to the explanation of utilities.py
+  - DONE - add output figures
+  - DONE - walk through brumley_and_boneh_main.py in details
+ - DONE - iteration on report
+  - DONE - intro
+  - DONE - technical background
+  - DONE - timing attacks
+  - DONE - experiments
+  - DONE - conclusion
+ - DONE - describe implementation in the report
+ - DONE - presentation, elaborate
+ - DONE - script for the presentation
+

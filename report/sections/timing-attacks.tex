@@ -1,0 +1,149 @@
+\section{Timing attacks}
+
+Having introduced some preliminary background, we can now describe the two core subjects of this work. We start presenting Kocher's timing attack, then we explain how Brumley and Boneh exposed RSA factors in OpenSSL-based applications.
+
+%----------------------------------------------------------------------------------------
+\subsection{The original Kocher's timing attack}
+
+Suppose that an attacker - Oscar - wants to disclose the private exponent $x$ of the decryption function of an RSA cryptosystem, that has the form $y^x \bmod n$, where $n$ is the public modulus, and $y \in \mathbb{Z}_n$ can be any ciphertext.
+
+Now, assume that Oscar already knows the first $b$ exponent bits, i.e. $d_0, \dots, d_{b - 1}$ (the first exponent bit $d_0$ is always $1$), where the total amount of exponent bits ($ k := \lceil \log_2x \rceil $) is supposed known.
+In addition, he is able to measure how much time as many decryption operations as he wants take, given any ciphertext $y$ that he provides.
+
+So, given a ciphertext $y$, the required time for its decryption is $T := e + \sum_{i=0}^{k-1} t_i$ where $t_i$ represents the time elapsed for modular multiplication operations in the $i$-th iteration of $\modexp(y, x, n)$, and $e$ is the sum of the required times of other operations assumed non-relevant here (e.g. loop overhead, assignment operations, etc.).
+
+In order to retrieve the private exponent $x$, Oscar decides to follow the steps needed by Kocher's timing attack described in \Cref{alg:two}.
+
+\begin{algorithm}
+\caption{Kocher's timing attack}\label{alg:two}
+\begin{algorithmic}[1]
+  \State generate $s$ ciphertexts $\{ y_1, \dots, y_s \}$;
+  \State given the knowledge of the first $(b - 1)$ exponent bits, and recalling that the first bit $d_0$ is always 1, guess the $b$-th exponent bit $d_b' := 0$;
+  \State measure $T'_j = e + \sum_{i = 0}^{b - 1} t'_i, \hspace{1cm} \forall j \in \{ 1, \dots, s\}$;
+  \State estimate $\Var(T - T')$ with the formula $\
+    \frac{1}{s - 1}\sum_{j = 1}^s \left( \
+      (T_j - T'_j) - \frac{1}{s}\sum_{j = 1}^s (T_j - T'_j) \
+    \right)^2 \
+  $;
+  \State repeat step 3. and step 4. with $d'_b := 1$;
+  \State choose $d^*_b \in \{0, 1\}$ that leads to the smaller value of $\Var(T - T')$;
+  \State set $d_b \leftarrow d^*_b$;
+  \State set $b \leftarrow b + 1$;
+  \State repeat from step 2. until $b > k - 1$ (i.e., until all exponent bits have been chosen).
+\end{algorithmic}
+\end{algorithm}
+
+% \begin{algorithm}
+% \caption{Kocher's timing attack}\label{alg:two}
+% \begin{algorithmic}[1]
+%   \State generate $s$ ciphertexts $\{ y_1, \dots, y_s \}$;
+%   \State given the knowledge of the first $(b - 1)$ exponent bits, and remembering that the first bit $d_0$ is always 1, guess the $b$-th exponent bit $d_b' := 0$;
+%   \State measure $T'_j = e + \sum_{i = 0}^{b - 1} t'_i, \hspace{1cm} \forall j \in \{ 1, \dots, s\}$;
+%   \State estimate $\Var(T - T')$ with the formula $\
+%     \frac{1}{s - 1}\sum_{j = 1}^s \left( \
+%       (T_j - T'_j) - \frac{1}{s}\sum_{j = 1}^s (T_j - T'_j) \
+%     \right)^2 \
+%   $;
+%   \State repeat step 3. with $d'_b := 1$;
+%   \State choose $d^*_b \in \{0, 1\}$ that leads to the smaller value of $\Var(T - T')$;
+%   \State set $d_b \leftarrow d^*_b$;
+%   \State set $b \leftarrow b + 1$;
+%   \State repeat from step 2. until $b > k - 1$ (i.e., until all exponent bits have been chosen).
+% \end{algorithmic}
+% \end{algorithm}
+
+In step 3.\ of \Cref{alg:two}, $T'$ can be measured running $\modexp(y, x_b, n)$, where $x_b := (d_0 d_1 \cdots d_{b-1} d'_b)_2$.
+
+\subsubsection{Probability of a correct guess}\label{subsub:guess}
+
+To compute the probability that Oscar correctly guesses the $b$-th exponent bit $x_b$, given that he already knows the real values of the first $b - 1$ bits (out of the total amount $k$), some preliminary assumptions and reasonings are necessary.
+
+Given $x_b$, Oscar can measure $T' = \sum_{i = 0}^{b - 1} t'_i$ for each ciphertext $y_j$, with $j \in \{ 1, \dots, s \}$. If $x_b$ is correct, $T - T'$ yields $e + \sum_{i = 0}^{k - 1} t_i - \sum_{i = 0}^{b - 1} t_i = e + \sum_{i = b}^{k - 1} t_i$.
+
+Now, it should be reasonable to assume all the time measurements i.i.d. as $\mathcal{N}(0, 1)$. In other words, times $t_i$ and $t'_i$ are all independent and identical distributed as a normal distribution with mean equal to $0$, and standard deviation equal to $1$, called standard normal distribution, and also denoted by $Z$.
+
+Thus, since for each ciphertext $y_j$, we have $\Var(T_j - T'_j) = \Var(e + \sum_{i = b}^{k - 1} t_i)$, the variance among all ciphertexts is expected to be $\Var(e) + (k - b)\nu$, with $\nu := \Var(t_i)\ \forall i$. However, if only the first $c < b$ bits of the exponent guess are correct, the expected variance will be $\Var(e) + (k + b - 2c)\nu$.
+
+Finally, assuming $\Var(e)$ negligible, the probability of a correct guess for Oscar can be computed as the probability that subtracting a correct $t'_b$ from each ciphertext will reduce the total variance more than subtracting an incorrect $t'_b$, and can be obtained with the following steps:
+
+\begin{gather*}
+Pr \left[
+  \frac{1}{s - 1}
+  \sum\limits_{j = 1}^{s} \left(
+    \sqrt{k - b} X_j  + \sqrt{2(b - c)} Y_j - 0
+  \right)^2
+  > \frac{1}{s - 1}\sum\limits_{j = 1}^{s} \left(
+    \sqrt{k - b} X_j - 0
+  \right)^2
+\right] \\
+= Pr \left[
+  (k - b) \sum\limits_{j = 1}^{s} X_j^2
+  + 2(b - c) \sum\limits_{j = 1}^{s} Y_j^2
+  + \sqrt{2(b - c)(k - b)} \sum\limits_{j = 1}^{s} X_j Y_j
+  > (k - b) \sum\limits_{j = 1}^{s} X_j^2
+\right] \\
+= Pr \left[
+  2(b - c) \sum\limits_{j = 1}^{s} Y_j^2
+  + \sqrt{2(b - c)}\sqrt{k - b} \sum\limits_{j = 1}^{s} X_j Y_j
+  > 0
+\right] \\
+= Pr \left[
+  2 \sqrt{ 2(b - c)(k - b) } \sum\limits_{j = 1}^{s} X_j Y_j
+  + 2(b - c) \sum\limits_{j = 1}^{s} Y_j^2 > 0
+\right]
+\end{gather*}
+
+where $X \sim Z$ and $Y \sim Z$. Moreover, for $s$ large enough, $\sum_{j = 1}^{s}Y_j^2 \approx s$, and $\sum_{j = 1}^{s}X_jY_j \sim \mathcal{N}(0, \sqrt{s})$, yielding
+
+\begin{align*}
+Pr \left(
+  2\sqrt{2(b - c)(k - b)} \left( \sqrt{s} Z \right)
+    + 2(b - c)s > 0
+\right) &= Pr \left(
+  Z > - \frac{ \sqrt{s(b - c)} }{2(k - b)}
+\right) \\
+&= Pr \left(
+  Z < \frac{\sqrt{s(b - c)}}{2(k - b)}
+\right) \\
+&= \Phi \left( \sqrt{ \frac{s(b - c)}{2(k - b)} } \right)
+\end{align*}
+
+where $\Phi(x)$ is the cumulative density function (CDF) of $Z$.
+
+%----------------------------------------------------------------------------------------
+\subsection{A timing attack on OpenSSL}\label{subsec:openssl}
+
+The timing attack designed by Brumley and Boneh in 2005, is able to expose the factorization of the modulus in an RSA cryptosystem implemented with OpenSSL, an SSL library that is commonly used in web servers and other SSL applications, especially at that time.
+
+Let $n = pq$ be an RSA modulus, with $q < p$. The attack aims to get progressively closer to the real value of $q$ one bit at a time, starting from the most significant bit in its binary representation until the first half is reached. Then, Coppersmith's algorithm is used to retrieve the other less significant half of the bits \cite{bib:coppersmith}.
+
+Suppose that Oscar wants to enforce a Brumley and Boneh's attack against an OpenSSL implementation of an RSA cryptosystem. Also assume that he already knows $i - 1$ bits of $q$. He starts to guess the other bits making $g$, i.e. using the bits that he already knows as the more significant $i - 1$ bits of $g$, and setting to $0$ the remaining ones (note that here, $g < q$). Moreover, given the public modulus $n: \lceil \log_2n \rceil = 1024$, Oscar knows that his guess $g$ of $q$ lies between $2^{511}$ and $2^{512}$.
+
+At this point, he can recover the $i$-th bit of $q$ observing the steps described in \Cref{alg:three}.
+
+\begin{algorithm}
+\caption{Brumley and Boneh's timing attack against OpenSSL}\label{alg:three}
+\begin{algorithmic}[1]
+  \State set $g' = g$, then $g'_i := 1$;
+  \begin{scriptsize}
+    \Comment If $q_i = 1$, then $g < g' < q$. Otherwise, $g < q < g'$.
+  \end{scriptsize}
+  \State compute $u_g = gR^{-1} \bmod n$ and $u_{g'} = g'R^{-1} \bmod n$;
+  \State measure $t_1 = \decryptiontime(u_g)$ and $t_2 = \decryptiontime(u_{g'})$;
+  \State compute $\Delta = \left| t_1 - t_2 \right|$;
+  \State \Return $0$ if $\Delta$ is "large". Otherwise ($\Delta$ is "small"), \Return $1$.
+\end{algorithmic}
+\end{algorithm}
+
+To distinguish between "large" and "small" values of $\Delta$, former iterations are considered. These quantities depend on the target system on which the attack takes place. In other words, definitions of "large" and "small" are likely to have dissimilar meanings in different systems, but consistent given the same one.
+
+When \Cref{alg:three} returns $0$ (i.e. $g < q < g'$) for the $i$-th bit, the "large" value of $\Delta$ can be positive as well as negative:
+\begin{enumerate}[label=(\roman*)]
+  \item $t_1 - t_2$ is positive when Montgomery reductions that take place more often for $g$ than $g'$ (from Schindler's observation described in \Cref{subsec:montgomery});
+  \item $t_1 - t_2$ is negative when Karatsuba's algorithm (that is faster than "normal" multiplication) is used to compute $g$ and "normal" multiplication is used for $g'$.
+\end{enumerate}
+
+In modular expontiation implementations that adopt sliding windows (such as in OpenSSL), there may not be enough multiplications by $g$, resulting in poor time estimations. To overcome this problem, the total decryption time for $g$ or $g'$ is estimated with: $$T_g = \sum\limits_{i = 0}^{n - 1} \decryptiontime (g + i),$$ where $g, g + 1, \dots, g + (n - 1)$ are a neighborhood of values that require a time estimation each.
+
+%----------------------------------------------------------------------------------------
+

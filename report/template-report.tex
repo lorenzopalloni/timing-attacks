@@ -1,0 +1,264 @@
+\documentclass{article}
+
+\usepackage[final,nonatbib]{neurips_2019}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+
+\usepackage{bm}
+\usepackage{amsmath}
+\usepackage{mathtools, nccmath}
+\DeclarePairedDelimiter{\nint}\lfloor\rceil
+\usepackage{enumitem}
+\usepackage{cleveref}
+
+\usepackage{todonotes}
+
+\title{Entity Embedding vs One Hot Encoding}
+
+\author{%
+  Lorenzo Palloni\\
+  University of Florence\\
+  \texttt{lorenzo.palloni@stud.unifi.it} \\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+When our focus is on prediction and in the inputs there are categorical variables, traditional One Hot Encoding technique can suffer from a variable with lots of states. Entity Embedding (with a small effort in training a neural network) can mitigate the problem around the explosion in complexity of encoding such categorical variables mapping the features into a lower space rather than with One Hot Encoding.
+We compare this two methods in a quite large dataset in a binary classification problem using a Neural Network and a Random Forest, with the hope of well generalizable results.
+\end{abstract}
+
+\section{Introduction}
+We first introduce some basic concepts regarding supervised learning and Feedforward Neural Network models. Then we explain One Hot Encoding (OHE) and later the Entity Embedding\cite{guo}. These are both techniques to encode categorical variables.
+
+In the second section of this report we learn the embedded representations of categorical features of a real dataset with a Feedforward Neural Network, then we feed a Random Forest on the learned representations and finally we compare the obtained results in predictions with the same Random Forest but using One Hot Encoding.
+
+\subsection{Notation}
+We briefly introduce some notations and a context to motivate the Entity Embedding approach.
+Let the set of tuple
+\begin{equation}
+    D = \left\{(x^{(i)}, y^{(i)})\right\},\ i = \{1, 2,\dots \}
+\end{equation}
+be a dataset, where each tuple consists of:
+\begin{itemize}[nosep]
+    \item[$\bullet$] $x^{(i)} = (x^{(i)}_1, x^{(i)}_2, \dots, x^{(i)}_p)$,\ \ a vector of $p$ input random variables,
+        \begin{itemize}
+            \item[] and $\left\{x^{(i)}\right\} \sim i.i.d.\ p(x)$, where $p(\cdot)$ is the (joint) probability density function (PDF);
+        \end{itemize}
+    \item[$\bullet$] $y^{(i)}$,\ \ an output random variable,
+        \begin{itemize}
+            \item[] and $\left\{y^{(i)}|x^{(i)}\right\} \sim i.i.d.\ p(y|x)$, where $p(\cdot|\cdot)$ is the conditional PDF.
+        \end{itemize}
+\end{itemize}
+We want to find the best approximation of the following relation:
+\begin{equation}
+    y^{(i)} = f\left(x^{(i)}_1, \dots, x^{(i)}_p\right),
+\end{equation}
+and the quality of the approximation is measured by means of an user-defined loss function $L(\cdot, \cdot)$, so the problem can be formulated as follows:
+\begin{equation}
+    f^* = \arg \min_{\hat{f}} \sum_{i}L(y^{(i)}, \hat{y}^{(i)}).
+\end{equation}
+where $\hat{y}^{(i)} = \hat{f}\left(x^{(i)}_1, \dots, x^{(i)}_p\right)$ is the $i$-th prediction based on the approximation $\hat{f}$.
+\subsection{Feedforward Neural Network}
+A Feedforward Neural Network is a model that tries to learn $f^*$, initializing $\hat{f}$ with a structure like the following:
+\begin{equation}
+    \hat{f}(x_{(i)}) = f_L( \dots f_l ( \dots f_2( f_1(x^{(i)})))))
+\end{equation}
+where
+\begin{itemize}
+    \item $x_i$ is a vector of inputs as we described above;
+    \item $f_l$ is a generic layer of the network and applies in parallel (as many times as the width of the corresponding layer that we noted with $d_l$ that is an hyperparameter) the following operation:
+    \begin{equation}
+        f^{(r)}_{l} = h(f_{l-1}\beta_r + \alpha_r),\ r \in \{1, \dots, d_l\}
+    \end{equation}
+where:
+        \begin{itemize}
+            \item $f^{(r)}_{l}$ is the $r$-th component of the output of the $l$-th layer, also called hidden unit.
+            \item $h(\cdot)$ is a non linear activation function;
+            \item $f_{l-1}$ is the output of the previous layer;
+            \item $\beta_r$ are the weights $p \times 1$ corresponding to the $r$-th hidden unit;
+            \item $\alpha_r$ is the intercept corresponding to the $r$-th hidden unit;
+        \end{itemize}
+    \item $f_1, f_2, \dots, f_{L - 1}$ are said to be the hidden layers and their activation function is typically chosen to be a function that is applied element-wise and in literature the rectified linear unit or ReLU\cite{relu} is almost ubiquitous;
+    \item $f_L$ is said to be the output layer and its activation function is problem-dependent, e.g. in a regression problem is usually used the identity function;
+\end{itemize}
+
+In literature all the intercept terms are almost always initialized to zero and all the weights are initialized with Glorot's normalized initialization\cite{glorot}:
+\begin{equation}
+    \beta \sim U\left[\ -\ \frac{\sqrt{6}}{\sqrt{fan\_in + fan\_out}},\ \frac{\sqrt{6}}{\sqrt{fan\_in + fan\_out}}\ \right],
+\end{equation}
+$fan\_in$ is the number of input units in the corresponding layer and $fan\_out$ is the number of output units in the same layer.
+The objective of this particular initialization is to keep constant the activation variances and back-propagated gradients variance along the forward and backward flow of the network.
+
+Let $D^*$ be an empiric dataset, i.e. with observations from the real world:
+\begin{equation}
+    \dot{D} = \left\{ \left( \dot{x}^{(i)}, \dot{y}^{(i)} \right)\right\},\ i \in \left\{ 1, \dots, n \right\},
+\end{equation}
+where $n$ is the number of observations. Choosing the $i$-th observation from the empiric dataset we can compute a prediction $\hat{y}^{(i)} = \hat{f}\left(\dot{x}^{(*)}\right)$ (this operation is called the forward propagation). Moreover choosing a loss function $L(\dot{y}^{(i)}, \hat{y}^{(i)})$ we can evaluate the quality of our predictions that likely will be initially a poor result.
+
+In fact we need to optimize the network. The back-propagation algorithm, also called backprop allows the computation (Tensorflow\cite{tf}) of the gradient of the loss function w.r.t. the weights and the bias terms.
+Choosing an optimizer algorithm (that simply take the gradient and update the relative parameters of the model) we can update all the weights and the bias terms in a backward pass, exploiting the backprop algorithm to compute the gradient.
+
+\subsection{One Hot Encoding}
+In order to feed a prediction model, if in $p$ inputs there is at least one categorical variable, says $x^{(i)}_j$, we have to choose a way to encode it.
+A naive approach is the overparametrized version of One Hot Encoding, which maps each state that $x^{(i)}_j$ can assume into a "one hot" representation, i.e. a $m_j$-length vector such that each value is zero except one at the position of the corresponding state, where $m_j$ is the number of unique values that $x^{(i)}_j$ can assume.
+
+In such a way, considering $n$ observations of $x^{(i)}_j$, we transform a $n$-vector into a sparse $n \times m_j$ matrix. This huge augmentation in the dimensions of the encoded features lead to computational problem in training phase and overfitting problem in prediction phase for most predictive models. We see in following sections how EE can mitigate this issue.
+
+\section{Entity Embedding}
+Expoiting the training phase of a neural network, Entity Embedding maps each state of a categorical variable $x^{(i)}_j$ into a vector of $k_j$ real values (called embedded vector). The embedded dimension $k_j \in \mathbb{N}^+$ of $x^{(i)}_j$ might be arbitrarily chosen within the range $[1,\ m_j - 1]$ (remembering that $m_j$ is the number of unique states that $x^{(i)}_j$ can assume). Similarly to the original paper\cite{guo} we suggest to choose low embedded dimensions and to accomplish the suggestion we propose the following function:
+\begin{equation}\label{eq:eq4}
+    f(m_j) = \min(m_j - 1,\ \nint{10 + \log(m_j - 1)}) = k_j,
+\end{equation}
+in order to keep the embedded dimension in a logarithmic scale of the original dimension.
+
+All the embedded vectors together compose an embedded layer linked to the original $x^{(i)}_j$. The final step is to train a neural network feeding it on the concatenation among all the embedded layers and the other variables (e.g. continuous, binaries and so on). In such a way the network will learn a representation of each state of each categorical features bringing informations in the embedded vectors about the relation between a state and the others (within an embedded layer) using as a proxy the relation of each state with the response variable.
+%The optimization algorithm (during the training phase of the network) will updates the values of the embedded vectors linked to the corresponding states that are present in the mini-batch together with the usual updatable weights.
+
+For example if we have a categorical variable (named $color$) that can assume only 4 states:
+\begin{align*}
+    color \in \left\{ '\text{red}',\ '\text{green}',\ '\text{blue}',\ '\text{orange}' \right\},
+\end{align*}
+choosing an embedded dimension of 2, we can build an embedded layer randomly initialized like the following:
+\begin{itemize}[nosep]
+    \centering
+    \item[$'\text{red}'\rightarrow$] [0.26, 0.51]
+    \item[$'\text{green}'\rightarrow$] [0.80, 0.23]
+    \item[$'\text{blue}'\rightarrow$] [0.11, -0.42]
+    \item[$'\text{orange}'\rightarrow$] [-0.34, 0.05]
+\end{itemize}
+If during the training phase the neural network will find a mini-batch as the following:
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{llll}
+    \toprule
+      $id$  & $age$ & $color$ & $y$ \\
+      \midrule
+      $0$ & $25$ & $'\text{red}'  $ & $1$ \\
+      $1$ & $46$ & $'\text{green}'$ & $0$ \\
+      $2$ & $32$ & $'\text{red}'  $ & $1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+the encoding of $color$ in the mini-batch will be
+\begin{table}[h!]
+  \centering
+  \begin{tabular}{lllll}
+    \toprule
+      $id$  & $age$ & $color_1$ & $color_2$ & $y$ \\
+      \midrule
+      $0$ & $25$ & $0.26$ & $0.51$ & $1$ \\
+      $1$ & $46$ & $0.80$ & $0.23$ & $0$ \\
+      $2$ & $32$ & $0.26$ & $0.51$ & $1$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+then the forward pass of the network will compute the predictions, the mean value of the loss function and the gradient of the loss w.r.t. all the weights and the values of the embedded vectors met in the mini-batch. Finally the chosen optimizer algorithm will update all those weights and the values of the embedded vectors met during this training step.
+
+\section{Experiments}
+For all the experiments we use a dataset hosted by Kaggle\footnote{https://kaggle.com/c/cat-in-the-dat/} for a competition named Categorical Feature Encoding Challenge, that is a binary classification problem and it has only categorical variables. Precisely it consists of $300k$ observations and $23$ features of various nature:
+\begin{itemize}[nosep]
+    \item[$\bullet$] binary (\#5);
+    \item[$\bullet$] nominal (\#10);
+    \item[$\bullet$] ordinal (\#6);
+    \item[$\bullet$] cyclical (\#2).
+\end{itemize}
+An important aspect to highlight is the number of unique states that for some nominal variables exceed $200$ states and can reach with the variable named "nom\_9" $11981$ states.
+We create embedded layers for all categorical variables that have more than $2$ states, choosing the new dimensions with the function shown in \cref{eq:eq4}. In such a way we obtain e.g. an embedded layer for "nom\_9" of dimensions $300k\times19$, a far less expensive representation than with OHE ($300k\times11981$).
+
+We use a Feedforward Neural Network with two hidden layers, the first one with 400 hidden units and the second one with 600. On top of the second hidden layer there is an output layer with a logistic activation function. We use the negative log likelihood (or cross entropy) as loss function. To update all the weights we choose the Adam\cite{adam} optimizer with hyperparameters left as default. We use the deep learning framework Tensorflow\cite{tf} to deploy the neural network.
+The input layer of the network is a concatenation of all the embedded layers plus all the other variables (in our case all binary variables).
+
+We split the data into 64\% training, 16\% validation and 20\% test set.
+Train and validation are used to choose hyperparameters of the network.
+
+\begin{table}[h]
+  \caption{Entity Embedding Neural Network results.}
+  \label{tab:tab1}
+  \centering
+  \begin{tabular}{lr}
+    \toprule
+    \multicolumn{2}{r}{AUC} \\
+    \cmidrule(r){1-2}
+    Train      & $0.8497$      \\
+    Validation & $0.7935$     \\
+      Test     & $\bm{0.7933}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+After 2 epochs of training, with a mini-batch size of 32 observations the neural network learns a representation of the embedded features with a the results showed in \cref{tab:tab1}.
+
+Moreover we extract the trained embedded layers from the Neural Network and we feed them together with the other binary variables to a random Forest classifier.
+A comparison in terms of predictions based on the area under the curve of the ROC of Random Forest trained using EE is shown in \cref{tab:tab2} and using OHE is shown in \cref{tab:tab3}. We can figure out from the gap between the two test set scores that EE technique performs better in this case rather than the OHE. Furthermore the first has better computational efficiency in terms of space occupancy and time spent.
+
+\begin{table}[h]
+  \caption{Random Forest + Entity Embeddings results.}
+  \label{tab:tab2}
+  \centering
+  \begin{tabular}{lr}
+    \toprule
+    \multicolumn{2}{r}{AUC} \\
+    \cmidrule(r){1-2}
+    Train   & $0.9879$        \\
+    Test    & $\bm{0.6121}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+\begin{table}[h]
+    \caption{Random Forest + One Hot Encoding results.}
+  \label{tab:tab3}
+  \centering
+  \begin{tabular}{lr}
+    \toprule
+    \multicolumn{2}{r}{AUC} \\
+    \cmidrule(r){1-2}
+    Train   & $0.6818$     \\
+    Test    & $\bm{0.5640}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Conclusion}
+Entity Embedding is a useful technique to put into your toolbox. This method allows the states of a categorical variable to bring more information to the model through the relations with the other states.
+We saw that in some situations can lead to a crucial saving in terms of computational resources especially in comparison with One Hot Encoding.
+Definitely there is a need to further investigations in this context with comparison among other techniques in different contexts.
+
+%\clearpage
+%\subsection{Figures}
+%
+%\begin{figure}
+%  \centering
+%  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
+%  \caption{Sample figure caption.}
+%\end{figure}
+%
+%\section*{References}
+
+\medskip
+%\clearpage
+{\small
+\bibliographystyle{ieee}
+\begin{thebibliography}{9}
+
+\bibitem{guo}{Guo, C., \& Berkhahn, F. (2016). Entity embeddings of categorical variables. arXiv preprint arXiv:1604.06737.}
+\bibitem{glorot}{Sutskever, I., Martens, J., Dahl, G., \& Hinton, G. (2013, February). On the importance of initialization and momentum in deep learning. In International conference on machine learning (pp. 1139-1147).}
+\bibitem{adam}{Kingma, D. P., \& Ba, J. (2014). Adam: A method for stochastic optimization. arXiv preprint arXiv:1412.6980.}
+\bibitem{tf}{Abadi, M., Barham, P., Chen, J., Chen, Z., Davis, A., Dean, J., ... \& Kudlur, M. (2016). Tensorflow: A system for large-scale machine learning. In 12th {USENIX} Symposium on Operating Systems Design and Implementation ({OSDI} 16) (pp. 265-283).}
+\bibitem{relu}{Nair, V., \& Hinton, G. E. (2010). Rectified linear units improve restricted boltzmann machines. In Proceedings of the 27th international conference on machine learning (ICML-10) (pp. 807-814).}
+
+\end{thebibliography}
+}
+
+\end{document}

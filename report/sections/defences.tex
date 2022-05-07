@@ -1,0 +1,12 @@
+\section{Defences}
+
+As Kocher highlighted in his work, defences like making all operations to take the same amount of time or adding random delays, do not work in practice. The former is hard to implement, especially a platform-independent manner (due to compiler optimizations, cache policies, etc.), and the latter can be sidestepped by increasing the number of samples required for the attack.
+
+Even after almost ten years, Brumley and Boneh stick with the same idea of Kocher, that is that the preferred choice for practical protection against timing attacks should be blinding.
+
+To apply blinding to an RSA system, a random integer $r$, coprime with the public modulus $n$, must be chosen. Now, given a plaintext $m$, its encryption is performed by first multiplying $m$ by $r$, and then computing $(mr)^e \bmod n$, where $\left< n, e \right>$ is the public key of the supposed RSA system. To recover $m$, the resulting ciphertext $c$ must be multiplied by $(r^{-1} \bmod n)^e$, before applying the decryption function.
+
+Blinding was embraced by RSA Security LLC (the American company co-founded by the RSA inventors) in their implementation of RSA, bearing a performance reduction up to 10\% \cite{bib:boreale}.
+
+%----------------------------------------------------------------------------------------
+
